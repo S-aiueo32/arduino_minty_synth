@@ -168,7 +168,7 @@ void setup()
                 toggleMIDI(); //toggle it if button 1 is held.
         }
         if (MIDIstate != 0) {
-                MIDI.begin(); //this defaults to the standard MIDI baud rate of 31250.
+                MIDI.begin(115200); //this defaults to the standard MIDI baud rate of 31250.
         }
         if (MIDIstate == 2) {
                 Serial.begin(115200); //use MIDI state 2 for sending MIDI via serial to PC (e.g. using Hairless MIDI)
@@ -179,7 +179,7 @@ void setup()
            Serial.begin(9600);
            printSongs();
          */
-
+        Serial.begin(115200);
 
 }
 
@@ -942,7 +942,7 @@ void loop()
                 thisStep++; //advance the step counter
 
 
-                if (thisStep > 15) {
+                if (thisStep > 255) {
                         thisStep = 0; //reset the counter after 16 steps
                 }
 
@@ -968,6 +968,8 @@ void loop()
                 if (thisStep == 0 && appendMode == 4 && Current == 6) {
                         Current = 2;
                 }
+                Serial.print(',');
+                Serial.println(thisStep);
         }                                                            //if we've appended four songs, return to the first after the fourth has played.
 
 }
