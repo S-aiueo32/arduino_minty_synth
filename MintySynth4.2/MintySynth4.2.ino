@@ -47,11 +47,36 @@
    along with this program.  If not, see http://www.gnu.org/licenses/
  */
 
+#include <Adafruit_NeoPixel.h>
 #include "synth.h"
 #include "song.h"
 #include <EEPROM.h>
-#include <avr/pgmspace.h>
+//#include <avr/pgmspace.h>
+
+/*
+#ifdef __AVR__
+  #include <avr/power.h>
+#endif
+*/
 #include <MIDI.h>
+
+/* for NeoPixel */
+// NeoPixel Ring simple sketch (c) 2013 Shae Erisson
+// released under the GPLv3 license to match the rest of the AdaFruit NeoPixel library
+
+// Which pin on the Arduino is connected to the NeoPixels?
+// On a Trinket or Gemma we suggest changing this to 1
+#define PIN            9
+
+// How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS      64
+
+// When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
+// Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
+// example for more information on possible values.
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+int delayval = 30; // delay for half a second
 
 synth edgar; //declare a synth
 
@@ -129,8 +154,29 @@ byte buttons[] = {// here is where we define the buttons that we'll use. button 
 byte pressed[NUMBUTTONS], justpressed[NUMBUTTONS], justreleased[NUMBUTTONS], longpress[NUMBUTTONS], extralongpress[NUMBUTTONS]; // we will track if a button is just pressed, just released, or 'currently pressed'
 
 
+
+
+
 void setup()
 {
+
+        /* NeoPixel */
+        // This is for Trinket 5V 16MHz, you can remove these three lines if you are not using a Trinket
+        //#if defined (__AVR_ATtiny85__)
+          //if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
+        //#endif
+          // End of trinket special code
+
+        bool mystat = pixels.begin(); // This initializes the NeoPixel library.
+
+        for (int i = 0; i < NUMPIXELS; i++) {
+          pixels.setPixelColor(i, pixels.Color(0,0,255));
+        }
+
+        //randomSeed(analogRead(5));
+        //pixels.setPixelColor(random(0, 63), pixels.Color(255,0,0));
+        pixels.show();
+
 
         DIDR0 = 0x3F; //disable the digital input buffers on the analog pins to save a bit of power and reduce noise.
 
@@ -143,6 +189,7 @@ void setup()
                 pinMode(buttons[i], INPUT);
                 digitalWrite(buttons[i], HIGH);
         }
+
 
         check_switches(); //we check the switches twice at startup so we catch whether button 0 is held.
         delay(100);
@@ -168,21 +215,19 @@ void setup()
                 toggleMIDI(); //toggle it if button 1 is held.
         }
         if (MIDIstate != 0) {
-                MIDI.begin(115200); //this defaults to the standard MIDI baud rate of 31250.
+                MIDI.begin(4);
+                // MIDI.begin(115200); //this defaults to the standard MIDI baud rate of 31250.
         }
         if (MIDIstate == 2) {
-                Serial.begin(115200); //use MIDI state 2 for sending MIDI via serial to PC (e.g. using Hairless MIDI)
+                //Serial.begin(115200); //use MIDI state 2 for sending MIDI via serial to PC (e.g. using Hairless MIDI)
         }
-
-
-        /* //uncomment this to print the four saved songs to the serial monitor on startup.
+        //uncomment this to print the four saved songs to the serial monitor on startup.
            Serial.begin(9600);
-           printSongs();
-         */
-        Serial.begin(115200);
+           //printSongs();
+        Serial.println(mystat);
+
 
 }
-
 
 void loop()
 {
@@ -231,97 +276,6 @@ void loop()
                 PORTD &= ~_BV(PD2); //turn off LED1
                 LED1state = 0;
         }
-
-        //***********************************************************************
-        //LDR Mode
-        //***********************************************************************
-        //if we're in LDR mode (and in Live Mode) we read pitch from the LDR instead of Pot 1.
-
-        /*
-        if (version == 2) {
-                if (pressed[1] && pressed[2] && programMode == 4) { //enter LDR Mode if buttons 0 and 1 are pressed.
-                        modeChange = 2;
-                        LDRMode = 1;
-                        livePots[1] = 0;
-                        LDRMax = analogRead(5);
-                } //take an ambient light reading to calibrate the LDR to the current light level.
-
-                if ((LDRMode && livePots[1] && !mixerMode && !instrumentProgMode && !wavProgMode && !pressed[0] && !pressed[1] && !pressed[2] && !pressed[3]) || programMode < 4) {
-                        LDRMode = 0;
-                }
-        }//turn LDRMode off if POT1 is turned or if we exit Live Mode.
-        */
-
-
-        //***********************************************************************
-        //Tripwire Mode
-        //***********************************************************************
-        //trigger a single loop of music if the ambient light source is blocked.
-
-        /*
-        if (version == 2) {
-                if ((pressed[2] && pressed[3] && programMode == 4 && !tripwireMode) || (pressed[2] && pressed[3] && programMode == 4 && tripwireMode && ((millis() - LDRTimer) > 6000))) {
-                        //enter tripwire Mode if buttons 2 and 3 are pressed and we're in Live Mode, or if we're already in Tripwire Mode and we just want to recalibrate.
-                        modeChange = 2;
-                        tripwireMode = 1;
-                        pause = 1;
-                        LDRMode = 0;
-                        lock_pots();
-                        PORTD &= ~_BV(PD2); //turn off the LEDs
-                        PORTD &= ~_BV(PD4);
-                        for (int i = 0; i < 3; i++) {//flash LED 1 to indicate beginning of calibration period
-                                delay(100);
-                                PORTD |= _BV(PD2);
-                                delay(25);
-                                PORTD &= ~_BV(PD2);
-                        }
-                        thisStep = 0; //begin at the first note in the song.
-                        LDRTimer = millis();
-
-                        while (((millis() - LDRTimer) < 5000) && tripwireMode) { // calibrate the LDR during the first five seconds of tripwire Mode. Taken from: https://www.arduino.cc/en/Tutorial/Calibration
-                                LDRread = analogRead(5);
-                                if (LDRread > LDRMax) { // record the maximum sensor value
-                                        LDRMax = LDRread;
-                                }
-                                if (LDRread < LDRMin) {// record the minimum sensor value
-                                        LDRMin = LDRread;
-                                }
-                        }
-
-                        for (int i = 0; i < 3; i++) {//flash LED 2 to indicate end of calibration
-                                delay(100);
-                                PORTD |= _BV(PD4);
-                                delay(25);
-                                PORTD &= ~_BV(PD4);
-                        }
-                }
-
-                if (tripwireMode) {
-                        LDRread = analogRead(5);
-                }
-
-                if (tripwireMode && pause && (LDRread < (((LDRMax - LDRMin) >> 1) + LDRMin))) {
-                        pause = 0;
-                }
-
-                if (tripwireMode && thisStep == 15) {
-                        pause = 1;
-                        thisStep = 0;
-                }
-
-                for (int i = 0; i < 5; i++) {
-                        if (livePots[i] && tripwireMode) {
-                                tripwireMode = 0;
-                                pause = 0;
-                        }
-                } //exit tripwire Mode if any wheel is turned.
-
-                if (LDRMode || programMode < 4) {
-                        tripwireMode = 0;
-                        pause = 0;
-                }
-        } //exit tripwire Mode if any wheel if we enter LDR Mode or Program Mode.
-        */
 
         //***********************************************************************
         //Waveform Button Programming
@@ -523,300 +477,6 @@ void loop()
 
 
         //***********************************************************************
-        //Sequencer Mode
-        //***********************************************************************
-        //this is a subset of Program Mode. When in Program Mode and button 0-3 held is held down, pots 0-3 are used to select the 16 indivually sequenced notes. We also use this mode to select the scale with pot 4.
-
-        /*
-        for (int i = 0; i < 4; i++) {
-                if (longpress[i] && !sequMode && programMode < 4) { //enter Sequencer Mode when we hold down button 0-3
-                        sequMode = 1;
-                        voice0Volume = volume[0]; //remember the current volume of voice 0
-                        if (modeChange == 0) {
-                                modeChange = 1; //set a modechange flag unless there's already one set
-                        }
-                        lock_pots();
-                }
-
-                for (int j = 0; j < 4; j++) {
-
-                        if (sequMode && longpress[i] && livePots[j]) {
-
-                                if (scaleNumber == 0) {
-                                        song[2][programMode][((4 * i) + j)] = constrain((map((POT[j]), 0, 1023, 18, 109)), 18, 108);
-                                }
-                                if (scaleNumber > 0) {
-                                        song[2][programMode][((4 * i) + j)] = (pgm_read_byte(&(scale[scaleNumber - 1][constrain((map((POT[j]), 0, 1023, 18, 109)), 18, 108)]))) + scaleShift;
-                                }
-                        }
-
-                        if  ((song[2][programMode][((4 * i) + j)]) < 20) {
-                                (song[2][programMode][((4 * i) + j)]) = 0;
-                        }
-
-                        if  ((song[2][programMode][((4 * i) + j)]) > 105) {
-                                (song[2][programMode][((4 * i) + j)]) = voicePrefs[2][programMode][1];
-                        }
-                }
-        }
-
-
-
-        //scale selection and sample scale player on pot 4 when we're in sequMode:
-
-        if (sequMode && livePots[4]) {
-
-                scaleNumber = constrain((map((POT[4]), 0, 1023, 0, 9)), 0, 8); //set the scale with pot4 if we're in sequMode.
-
-                pause = 1; //pause the step timer while we're playing sample scale notes
-                volume[0] = 8; //temporarily turn up voice 0 if necessary.
-
-                if (scaleChange) {
-                        showBinary(scaleNumber);
-                }
-
-                if (prevScaleNumber != scaleNumber) {
-                        scaleChange = 1; //set a flag if the scale has changed.
-                }
-                else {
-                        scaleChange = 0;
-                }
-                if (scaleChange) {
-                        prevScaleNumber = scaleNumber;
-                }
-
-                if (scaleChange) { //reset the scale to the beginning if the scale has changed.
-                        scaleNote = 0;
-                        ascending = 1;
-                }
-
-                if ((((millis() - triggerTime) >= 100) && (scaleNote > 0 || !ascending)) || (scaleNote == 0 && ((millis() - triggerTime) >= 500) && ascending))  {//trigger the next sample scale note if enough time has passed.
-
-                        edgar.setupVoice(0, 10, 60, 1, 60, 64);
-                        instrumentPlaying[0] = 0;
-                        channelPlaying[0] = 1; //set MIDI channel to 1 and instrument to piano for the sample scale.
-
-                        edgar.mTrigger(0, sampleScale[scaleNumber][scaleNote]);
-
-                        if (sampleScale[scaleNumber][scaleNote] == 72) {
-                                ascending = 0; //reverse the scale when we get to the top.
-                        }
-                        if (ascending) {
-                                scaleNote++; //increment the scale note if we're going up.
-                        }
-                        if (!ascending && scaleNote == 0) {
-                                ascending = 1; //reverse the scale again when we get to the bottom.
-                        }
-                        if (!ascending && scaleNote > 0) {
-                                scaleNote--; //decrement the scale note if we're going down.
-                        }
-
-                        triggerTime = millis();
-                }
-        }
-
-        if (sequMode && modeChange == 0) { //if there's no modeChange flag, it's because a button has been released, and it's time to exit sequMode. We also make sure we're set up to start the next sample scale at the beginning.
-                sequMode = 0;
-                pause = 0;
-                volume[0] = voice0Volume; //turn voice 0 back down if necessary.
-                scaleNote = 0; //reset the scale for next time.
-                ascending = 1;
-                scaleChange = 1;
-                PORTD &= ~_BV(PD2); //turn off the LEDs if they're on.
-                PORTD &= ~_BV(PD4);
-                lock_pots();
-        }
-        */
-
-        //***********************************************************************
-        //Program Mode
-        //***********************************************************************
-        //if Program mode 0-4 is on but sequMode isn't, the pots and buttons are used to set up voices 0-4.
-
-        /*
-        for (int i = 0; i < 4; i++) { //enter Program Mode when we hold down button 4 and press button 0-3
-                if (pressed[4] && justpressed[i]) {
-                        modeChange = 2;
-                        programMode = i;
-                        PORTD &= ~_BV(PD2); //turn off LED 1 in case it was still on in Live Mode.
-                        Current = 2; //set the currently playing song to 2 (this is always where we store the song currently being sequenced.
-                        lock_pots();
-                }
-        }
-
-        if (programMode < 4 && !sequMode) { //when in Program Mode we use the buttons to set the waveform and write it to the voicePrefs array.
-                for (int i = 0; i < 5; i++) {
-                        if (justreleased[i]) {
-                                voicePrefs[2][programMode][0] = switchWave[i];
-                                voicePrefs[2][programMode][6] = MIDIswitchWave[i];
-                                voicePrefs[2][programMode][5] = MIDIswitchChannel[i];
-                        }
-                }
-        }
-
-        if (programMode < 4 && !sequMode) { //if we're in Program mode but not Sequence Mode, use the pots to select the voice parameters and write them to the userPrefa array.
-
-                if (livePots[1]) {
-                        voicePrefs[2][programMode][1] = userPitch;
-                        song[2][programMode][programMode * 4] = userPitch;
-                }
-                if (livePots[3]) {
-                        voicePrefs[2][programMode][2] = userEnv;
-                }
-                if (livePots[2]) {
-                        voicePrefs[2][programMode][3] = userLength;
-                }
-        }
-
-        if (programMode < 4 && !sequMode && mixerMode && livePots[4]) {
-                voicePrefs[2][programMode][4] = userMod; //set modulation if we're in Mixer Mode
-        }
-
-        if (pressed[0] && justpressed[4] && programMode < 4) { //exit Program Mode (enter Live Mode) if we hold down 0 and press 4.
-                modeChange = 2;
-                programMode = 4;
-                PORTD &= ~_BV(PD4); //turn off LED 2 in case it was still on in Program Mode.
-                userWave = voicePrefs[2][3][0]; //preset the prefs for voice 3 using the array, so it will stay the same until the variables change after entering Live Mode.
-                currentInstrument = voicePrefs[2][3][6];
-                currentChannel = voicePrefs[2][3][5];
-                userPitch = voicePrefs[2][3][1];
-                userEnv = voicePrefs[2][3][2];
-                prevEnv = userEnv;
-                userLength = voicePrefs[2][3][3];
-                userMod = voicePrefs[2][3][4];
-                lock_pots();
-        }
-        */
-
-        //***********************************************************************
-        //Save and Load
-        //***********************************************************************
-
-        //save
-        /*
-        for (int i = 0; i < 4; i++) {
-                if (!(modeChange == 2) && programMode == 4  && !wavProgMode && !instrumentProgMode &&  pressed[i] && extralongpress[4]) {
-                        modeChange = 2;
-                        save(i);
-                }
-        }
-
-        //load one song when a button is held for three seconds.
-        for (int i = 1; i < 4; i++) { //buttons 1-3
-                if (modeChange == 0 && programMode == 4 && !wavProgMode && !instrumentProgMode && !pressed[4] && extralongpress[i] && !pressed[0]) {
-                        modeChange = 1; //only one button pressed to trigger load(), so we set one modechange flag.
-                        load(i);
-                }
-        }
-
-        if (modeChange == 0 && programMode == 4  && !wavProgMode && !instrumentProgMode && !pressed[4] && extralongpress[0] && !pressed[1] && !pressed[2] && !pressed[3]) {//button 0
-                modeChange = 1; //only one button pressed to trigger load(), so we set one modechange flag.
-                load(0);
-        }
-
-        //load and append up to four songs when 0 is pressed and button 1-3 is held
-        if (modeChange == 0 && programMode == 4 && !wavProgMode && !instrumentProgMode && pressed[0] && extralongpress[1] && !pressed[2] && !pressed[3]) {
-                append(0);
-                append(1);
-                modeChange = 2; //two buttons are held, so we set modeChange flag to 2.
-                appendMode = 2;
-        }
-
-        if (modeChange == 0 && programMode == 4 && !wavProgMode && !instrumentProgMode && pressed[0] && extralongpress[2] && !pressed[3]) {
-                append(0);
-                append(1);
-                append(2);
-                modeChange = 2;
-                appendMode = 3;
-        }
-
-        if (modeChange == 0 && programMode == 4 && !wavProgMode && !instrumentProgMode && pressed[0] && extralongpress[3]) {
-                append(0);
-                append(1);
-                append(2);
-                append(3);
-                modeChange = 2;
-                appendMode = 4;
-        }
-        */
-
-        //***********************************************************************
-        //Song Shift and Scale Shift
-        //***********************************************************************
-
-        /*
-        if (pressed[0] && justpressed[1] && programMode < 4) {
-                modeChange = 2;
-                shiftMode = 1;
-                shiftTimer = millis();
-                if (songShift < 15) {
-                        songShift++;
-                }
-                showBinary(abs(songShift));
-                justpressed[1] = 0;
-                if (songShift < 15) {
-                        for (int i = 0; i < 4; i++) {
-                                for (int j = 0; j < 16; j++) {
-                                        if (song[2][i][j] != 0 && song[2][i][j] < 128) {
-                                                song[2][i][j] = song[2][i][j] + 1;
-                                        }
-                                }
-                        }
-                }
-        }
-
-        if (pressed[1] && justpressed[0] && programMode < 4) {
-                modeChange = 2;
-                shiftMode = 1;
-                shiftTimer = millis();
-                if (songShift > -15) {
-                        songShift--;
-                }
-                showBinary(abs(songShift));
-                justpressed[0] = 0;
-                if (songShift > -15) {
-                        for (int i = 0; i < 4; i++) {
-                                for (int j = 0; j < 16; j++) {
-                                        if (song[2][i][j] > 1) {
-                                                song[2][i][j] = song[2][i][j] - 1;
-                                        }
-                                }
-                        }
-                }
-        }
-
-
-        if (pressed[2] && justpressed[3] && programMode < 4) {
-                modeChange = 2;
-                shiftMode = 1;
-                shiftTimer = millis();
-                if (scaleShift < 15) {
-                        scaleShift++;
-                }
-                showBinary(abs(scaleShift));
-                justpressed[3] = 0;
-        }
-
-        if (pressed[3] && justpressed[2] && programMode < 4) {
-                modeChange = 2;
-                shiftMode = 1;
-                shiftTimer = millis();
-                if (scaleShift > -15) {
-                        scaleShift--;
-                }
-                justpressed[2] = 0;
-                showBinary(abs(scaleShift));
-        }
-
-        if (((millis() - shiftTimer) >= 1500) && shiftMode) { //exit shift mode
-                shiftMode = 0;
-                PORTD &= ~_BV(PD2); //turn off the LEDs
-                PORTD &= ~_BV(PD4);
-        }
-        */
-
-
-        //***********************************************************************
         //Battery
         //***********************************************************************
 
@@ -832,6 +492,13 @@ void loop()
         if ((millis() - triggerTime) >= swingLength && !pause) {//check to see if the previous step is done and the music is not paused. If so, reset the step timer, set up the voices, and trigger the next step.
 
                 triggerTime = millis();
+
+                /* for NeoPixel */
+                //pixels.setPixelColor(random(0, 63), pixels.Color(255,0,0));
+                // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
+
+                pixels.setPixelColor(thisStep, pixels.Color(125,0,0)); // Moderately bright green color.
+                pixels.show(); // This sends the updated pixel color to the hardware.
 
                 //***********************************************************************
                 //Voice Setup
@@ -910,25 +577,40 @@ void loop()
                         instrumentPlaying[3] = currentInstrument;
                 }                            //set the MIDI instrument for voice 3
 
+                //while(1);
+
                 //***********************************************************************
                 //Note Trigger
                 //***********************************************************************
 
+                //ここなら動く
+                //while(1);
+
                 if (song[Current][0][thisStep] != 0 && volume[0] != 13 && (voicePrefs[Current][0][3]) > 2) {
+                        //ここだとダメ
+                        //while(1)
                         edgar.mTrigger(0, song[Current][0][thisStep]); //trigger voices 0-2, getting the pitch from the song array. If the value in the array is 0 or if the duration is very short, no note is played.
                 }
                 if (song[Current][1][thisStep] != 0 && volume[1] != 13 && (voicePrefs[Current][1][3]) > 2) {
+                        //while(1)
                         edgar.mTrigger(1, song[Current][1][thisStep]);
                 }
                 if (song[Current][2][thisStep] != 0 && volume[2] != 13 && (voicePrefs[Current][2][3]) > 2) {
+                        //while(1)
                         edgar.mTrigger(2, song[Current][2][thisStep]);
                 }
                 if (programMode < 4 && song[Current][3][thisStep] != 0 && volume[3] != 13 && (voicePrefs[Current][3][3]) > 3) {
+                        //while(1)
                         edgar.mTrigger(3, song[Current][3][thisStep]); //if we're in Program Mode 0-3 we want to read the voice 3 pitch from the array, just like the other voices.
                 }
                 else if (song[Current][3][thisStep] != 0  && volume[3] != 13 && userLength > 3) {
+                        //while(1)
                         edgar.mTrigger(3, userPitch); //if we're in Live Mode we'll read voice 3 pitch from the Pot or LDR.
                 }
+
+                //pixels.setPixelColor(thisStep, pixels.Color(125,0,0)); // Moderately bright green color.
+                //pixels.show(); // This sends the updated pixel color to the hardware.
+                //while(1);
 
 
                 //***********************************************************************
@@ -937,12 +619,15 @@ void loop()
 
                 if (!envMode && !shiftMode && !pause && !wavProgMode && !instrumentProgMode) {
                         flash_leds();
+                        // pixels.setPixelColor(thisStep, pixels.Color(125,0,0)); // Moderately bright green color.
+                        // pixels.show(); // This sends the updated pixel color to the hardware.
+
                 }
 
                 thisStep++; //advance the step counter
 
 
-                if (thisStep > 255) {
+                if (thisStep > 15) {
                         thisStep = 0; //reset the counter after 16 steps
                 }
 
@@ -970,6 +655,7 @@ void loop()
                 }
                 Serial.print(',');
                 Serial.println(thisStep);
+
         }                                                            //if we've appended four songs, return to the first after the fourth has played.
 
 }

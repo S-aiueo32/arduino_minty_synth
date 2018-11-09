@@ -354,9 +354,16 @@ void setMod(unsigned char voice,unsigned char mod)
 
 void mTrigger(unsigned char voice,unsigned char MIDInote)
 {
+        Serial.println(123456789);
+        PITCH[voice]=pgm_read_word(&PITCHS[MIDInote]);
+        EPCW[voice]=0;
+        FTW[divider] = PITCH[voice] + (int)   (((PITCH[voice]>>6)*(EPCW[voice]>>6))/128)*MOD[voice];
+        /*
         PITCH[voice] = pgm_read_word(&PITCHS[MIDInote]);
+        //while(1);
         EPCW[voice] = 0;
         FTW[divider] = PITCH[voice] + (int)   (((PITCH[voice] >> 6) * (EPCW[voice] >> 6)) / 128) * MOD[voice];
+
         //MIDI stuff added by AM:
         if (MIDIOn[voice]) {
                 MIDI.sendNoteOff(MIDINotePlaying[voice],0,channelPlaying[voice]); //turn off the currently playing MIDI note for this voice if it's still on.
@@ -370,7 +377,7 @@ void mTrigger(unsigned char voice,unsigned char MIDInote)
                 MIDI.sendNoteOn(constrain((map((MIDInote),20,105,25,88)),25,87),(155 - (volume[voice] * (volume[voice] - 4))),channelPlaying[voice]); //we remap the notes if we're playing percussion to make use of the whole potentiometer range.
         }
         MIDINotePlaying[voice] = MIDInote; //remember what note is playing so we can turn it off later.
-        MIDIOn[voice] = 1; //flag whether there's a MIDI note on for this voice so we'll know if we need to turn it off.
+        MIDIOn[voice] = 1; //flag whether there's a MIDI note on for this voice so we'll know if we need to turn it off.*/
 }
 
 //*********************************************************************

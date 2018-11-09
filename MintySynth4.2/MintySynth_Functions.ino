@@ -297,7 +297,7 @@ void flash_leds()
 
         if (programMode == 4) {
 
-                if (thisStep == 0 || thisStep == 4 || thisStep == 8 || thisStep == 12) {//turn on LED 2 for the 1st, 4th, 8th, and 12th steps in the sequence if we're in Live Mode.
+                if ((thisStep % 4) == 0) {//turn on LED 2 for the 1st, 4th, 8th, and 12th steps in the sequence if we're in Live Mode.
                         PORTD |= _BV(PD4); //LED 2 (direct port manipulation)
                         LED2state = 1;
                 }
