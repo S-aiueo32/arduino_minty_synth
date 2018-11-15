@@ -167,7 +167,7 @@ void setup()
         //#endif
           // End of trinket special code
 
-        bool mystat = pixels.begin(); // This initializes the NeoPixel library.
+        pixels.begin(); // This initializes the NeoPixel library.
 
         for (int i = 0; i < NUMPIXELS; i++) {
           pixels.setPixelColor(i, pixels.Color(0,0,255));
@@ -224,7 +224,6 @@ void setup()
         //uncomment this to print the four saved songs to the serial monitor on startup.
            Serial.begin(9600);
            //printSongs();
-        Serial.println(mystat);
 
 
 }
@@ -627,7 +626,7 @@ void loop()
                 thisStep++; //advance the step counter
 
 
-                if (thisStep > 15) {
+                if (thisStep > 255) {
                         thisStep = 0; //reset the counter after 16 steps
                 }
 
