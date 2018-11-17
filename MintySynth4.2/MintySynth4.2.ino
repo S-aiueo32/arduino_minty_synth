@@ -604,6 +604,7 @@ void loop()
                 }
                 else if (song[Current][3][thisStep] != 0  && volume[3] != 13 && userLength > 3) {
                         //while(1)
+                        userPitch = 1.2*userPitch;
                         edgar.mTrigger(3, userPitch); //if we're in Live Mode we'll read voice 3 pitch from the Pot or LDR.
                 }
 
@@ -652,8 +653,17 @@ void loop()
                 if (thisStep == 0 && appendMode == 4 && Current == 6) {
                         Current = 2;
                 }
+                
+                Serial.print(userWave);
                 Serial.print(',');
-                Serial.println(thisStep);
+                Serial.print(userEnv);
+                Serial.print(',');
+                Serial.print(stepLength);
+                Serial.print(',');
+                Serial.print(userPitch);
+                Serial.print(',');
+                Serial.println(userMod);
+                
 
         }                                                            //if we've appended four songs, return to the first after the fourth has played.
 

@@ -354,7 +354,7 @@ void setMod(unsigned char voice,unsigned char mod)
 
 void mTrigger(unsigned char voice,unsigned char MIDInote)
 {
-        Serial.println(123456789);
+        //Serial.println(123456789);
         PITCH[voice]=pgm_read_word(&PITCHS[MIDInote]);
         EPCW[voice]=0;
         FTW[divider] = PITCH[voice] + (int)   (((PITCH[voice]>>6)*(EPCW[voice]>>6))/128)*MOD[voice];
